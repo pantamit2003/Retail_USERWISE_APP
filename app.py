@@ -944,17 +944,17 @@ else:
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric(
-                "📦 Total Orders",
+                "📦 Total Orders Qty",
                 int(dash_total_qty)
             )
         with col2:
             st.metric(
-                "✅ Total Billed",
+                "✅ Total Billed Qty",
                 int(dash_billed_qty)
             )
         with col3:
             st.metric(
-                "⏳ Total Pending",
+                "⏳ Total Pending Qty",
                 int(dash_pending_qty)
             )
         with col4:
