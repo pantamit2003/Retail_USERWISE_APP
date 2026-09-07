@@ -6,23 +6,28 @@ import threading
 import pytz
 import base64
 import os
+
 # ============================================================
 # CONFIG
 # ============================================================
 LOGIN_API_URL = "https://script.google.com/macros/s/AKfycbyagL0weEesEjs1RohprP2_OF5heaHGKoxE_AWk7SCmveFWl6k-2vM2wXUVQgBaX4emew/exec"
+
 # ============================================================
 # CREATE ORDER API
 # EXISTING CREATE ORDER BACKEND
 # ============================================================
 CREATE_ORDER_API_URL = "https://script.google.com/macros/s/AKfycbzoeuciiCqzwm6O_UHv-h_R8wkdeEX0TMTUSV64Ho1T-Ut3YoBw5rB3JtT0Sx8hkm4U/exec"
+
 # ============================================================
 # ORDER ACTIVITY API
 # NEW SEPARATE ORDER ACTIVITY BACKEND
 # ============================================================
 ORDER_ACTIVITY_API_URL = "https://script.google.com/macros/s/AKfycbw03zjKkyX8vXIY3cmr5E7Rmn7uIdhj87yK1Xif8VgvGW3UvcAsrMSwvHHZDSYp9xxO/exec"
+
 STOCK_URL = "https://docs.google.com/spreadsheets/d/1AalnQ8HBiLYo4tgpKUtyk6aCc9k4ZJTO8n74UizaBig/export?format=csv&gid=0"
 OD_URL = "https://docs.google.com/spreadsheets/d/1piSm1HMO0PFzW28PIChPgULJoL8n5cjg_HUi7bZBwJ8/export?format=csv&gid=81459910"
 PHOTO_URL = "https://docs.google.com/spreadsheets/d/12vBtZzZil_8NKtb3GgrIvmzUHGDWeXpvgR3XhFbXudI/export?format=csv&gid=719185942"
+
 # ============================================================
 # PAGE CONFIG
 # ============================================================
@@ -31,6 +36,7 @@ st.set_page_config(
     page_icon="📦",
     layout="wide"
 )
+
 # ============================================================
 # GLOBAL STYLING
 # ============================================================
@@ -136,6 +142,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 # ============================================================
 # SESSION STATE
 # ============================================================
@@ -161,6 +168,7 @@ if "submitted" not in st.session_state:
     st.session_state.submitted = False
 if "submitted_by" not in st.session_state:
     st.session_state.submitted_by = ""
+
 # ============================================================
 # ORDER ACTIVITY DATE STATES
 # ============================================================
@@ -170,6 +178,7 @@ if "pending_date" not in st.session_state:
     st.session_state.pending_date = None
 if "cancelled_date" not in st.session_state:
     st.session_state.cancelled_date = None
+
 # ============================================================
 # RESTORE LOGIN AFTER BROWSER REFRESH
 # ============================================================
@@ -186,6 +195,7 @@ if not st.session_state.logged_in:
             if parties_str
             else []
         )
+
 # ============================================================
 # DATE / TIME
 # ============================================================
@@ -194,6 +204,33 @@ now_ist = datetime.now(ist)
 date_time = now_ist.strftime(
     "%d-%m-%Y %H:%M:%S"
 )
+
+# ============================================================
+# SESSION-LEVEL CACHE HELPER
+# Fetches only once per session (on first need / after login,
+# or after login/logout, or when user manually hits Refresh).
+# Page switches (Dashboard <-> Stock <-> OD <-> Photo <-> Order
+# Activity) will NOT trigger a re-fetch since data already
+# sits in st.session_state.
+# ============================================================
+def get_cached(key, loader_fn, *args, **kwargs):
+    if key not in st.session_state:
+        st.session_state[key] = loader_fn(*args, **kwargs)
+    return st.session_state[key]
+
+
+def clear_all_cached_data():
+    """Used by the sidebar Refresh button to force fresh fetch everywhere."""
+    keys_to_clear = [
+        k for k in st.session_state.keys()
+        if k.startswith("cached_")
+    ]
+    for k in keys_to_clear:
+        del st.session_state[k]
+    # Also clear underlying st.cache_data caches so a truly fresh
+    # network/sheet fetch happens, not just a session-state repopulation.
+    st.cache_data.clear()
+
 # ============================================================
 # LOAD STOCK
 # ============================================================
@@ -233,6 +270,7 @@ def load_stock():
             .str.strip()
         )
     return df
+
 # ============================================================
 # LOAD OD / OUTSTANDING DATA
 # ============================================================
@@ -312,6 +350,7 @@ def load_od_status():
         != "TOTAL"
     ].copy()
     return df
+
 # ============================================================
 # LOGIN FUNCTION
 # ============================================================
@@ -333,6 +372,7 @@ def login_user(username, password):
             "success": False,
             "message": f"Connection error: {e}"
         }
+
 # ============================================================
 # USER MAPPING FUNCTION
 # ============================================================
@@ -353,6 +393,7 @@ def get_user_mapping(username):
             "success": False,
             "message": f"Connection error: {e}"
         }
+
 # ============================================================
 # SEND ORDER DATA
 # CREATE ORDER ONLY
@@ -366,6 +407,7 @@ def send_data(payload):
         )
     except Exception:
         pass
+
 # ============================================================
 # GET ORDER ACTIVITY
 # SEPARATE ORDER ACTIVITY API
@@ -400,6 +442,7 @@ def get_order_activity(parties):
                 "log mein check karo."
             )
         }
+
 # ============================================================
 # LOAD SKU PHOTOS
 # ============================================================
@@ -459,6 +502,7 @@ def load_sku_photos():
             convert_drive_link
         )
     return df
+
 # ============================================================
 # LOGIN PAGE
 # ============================================================
@@ -677,6 +721,10 @@ if not st.session_state.logged_in:
                         else:
                             st.session_state.user_parties = []
                         st.session_state.page = "Dashboard"
+                        # Fresh login -> make sure any stale cached_*
+                        # data from a previous session/user is wiped so
+                        # the very first load after login is fresh.
+                        clear_all_cached_data()
                         if remember_me:
                             st.query_params["u"] = (
                                 st.session_state.username
@@ -699,6 +747,7 @@ if not st.session_state.logged_in:
                             "Login failed ❌"
                         )
                     )
+
 # ============================================================
 # MAIN APPLICATION
 # ============================================================
@@ -761,6 +810,15 @@ else:
             st.session_state.page = "SKU Photo"
             st.rerun()
         st.divider()
+        # REFRESH DATA
+        if st.button(
+            "🔄 Refresh Data",
+            use_container_width=True
+        ):
+            clear_all_cached_data()
+            st.toast("Data refreshed ✅")
+            st.rerun()
+        st.divider()
         # LOGOUT
         if st.button(
             "🚪 Logout",
@@ -789,12 +847,17 @@ else:
             with st.spinner(
                 "Loading dashboard summary..."
             ):
-                dash_result = get_order_activity(
+                dash_parties_key = (
                     ()
                     if dash_is_admin
                     else tuple(
                         st.session_state.user_parties
                     )
+                )
+                dash_result = get_cached(
+                    f"cached_order_activity_{dash_is_admin}_{dash_parties_key}",
+                    get_order_activity,
+                    dash_parties_key
                 )
             if dash_result.get("success"):
                 dash_data = dash_result.get(
@@ -979,7 +1042,7 @@ else:
         col1, col2 = st.columns(2)
         with col1:
             try:
-                df = load_stock()
+                df = get_cached("cached_stock_df", load_stock)
                 if "SKU" not in df.columns:
                     st.error(
                         "Stock sheet mein SKU column nahi mila ❌"
@@ -1173,12 +1236,17 @@ else:
         with st.spinner(
             "Loading order activity..."
         ):
-            result = get_order_activity(
+            oa_parties_key = (
                 ()
                 if is_admin
                 else tuple(
                     st.session_state.user_parties
                 )
+            )
+            result = get_cached(
+                f"cached_order_activity_{is_admin}_{oa_parties_key}",
+                get_order_activity,
+                oa_parties_key
             )
         if not result.get("success"):
             st.error(
@@ -1555,7 +1623,7 @@ else:
         )
         st.divider()
         try:
-            stock_df = load_stock()
+            stock_df = get_cached("cached_stock_df", load_stock)
         except Exception as e:
             st.error(
                 f"Stock load error: {e}"
@@ -1628,6 +1696,64 @@ else:
                 len(stock_display_df.columns)
             )
         st.divider()
+        stock_kpi_cols = [
+            "FARUKHNAGAR",
+            "MUMBAI STOCK"
+        ]
+        l3_matching_cols = [
+            col
+            for col in filtered_stock_df.columns
+            if "L3" in col
+        ]
+        l3_actual_col = (
+            l3_matching_cols[0]
+            if l3_matching_cols
+            else None
+        )
+        available_kpi_cols = [
+            col
+            for col in stock_kpi_cols
+            if col in filtered_stock_df.columns
+        ]
+        if l3_actual_col:
+            available_kpi_cols.append(l3_actual_col)
+        if available_kpi_cols:
+            kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
+            kpi_targets = {
+                "FARUKHNAGAR": (
+                    kpi_col1,
+                    "🏭 Farukhnagar Stock"
+                ),
+                "MUMBAI STOCK": (
+                    kpi_col2,
+                    "🏙 Mumbai Stock"
+                )
+            }
+            if l3_actual_col:
+                kpi_targets[l3_actual_col] = (
+                    kpi_col3,
+                    "🇮🇳 L3 Stock (PAN India)"
+                )
+            for kpi_col_name, (kpi_slot, kpi_label) in kpi_targets.items():
+                with kpi_slot:
+                    if kpi_col_name in filtered_stock_df.columns:
+                        kpi_values = pd.to_numeric(
+                            filtered_stock_df[kpi_col_name]
+                            .astype(str)
+                            .str.replace(",", "", regex=False)
+                            .str.strip(),
+                            errors="coerce"
+                        ).fillna(0)
+                        st.metric(
+                            kpi_label,
+                            int(kpi_values.sum())
+                        )
+                    else:
+                        st.metric(
+                            kpi_label,
+                            "N/A"
+                        )
+            st.divider()
         csv_data = (
             stock_display_df
             .to_csv(index=False)
@@ -1675,7 +1801,7 @@ else:
             "Loading OD / Outstanding data..."
         ):
             try:
-                od_df = load_od_status()
+                od_df = get_cached("cached_od_df", load_od_status)
             except Exception as e:
                 st.error(
                     f"OD data load error: {e}"
