@@ -459,37 +459,98 @@ def send_data(payload):
         pass
 
 # ============================================================
-# GET ORDER ACTIVITY
-# SEPARATE ORDER ACTIVITY API
+# GET ORDER ACTIVITY FROM SUPABASE
 # ============================================================
 @st.cache_data(ttl=30)
 def get_order_activity(parties):
-    payload = {
-        "action": "get_order_activity",
-        "parties": list(parties)
-    }
+
     try:
-        response = requests.post(
-            ORDER_ACTIVITY_API_URL,
-            json=payload,
-            timeout=45
+
+        query = (
+            supabase
+            .table("orders")
+            .select(
+                "order_date,"
+                "user_name,"
+                "party,"
+                "sku,"
+                "qty,"
+                "final_status"
+            )
         )
-    except Exception as e:
+
+        # ----------------------------------------------------
+        # NORMAL USER → ONLY MAPPED PARTIES
+        # ADMIN → ALL ORDERS
+        # ----------------------------------------------------
+        if parties:
+            query = query.in_(
+                "party",
+                list(parties)
+            )
+
+        # Latest orders first
+        query = query.order(
+            "order_date",
+            desc=True
+        )
+
+        response = query.execute()
+
+        rows = response.data or []
+
+        # ----------------------------------------------------
+        # CONVERT SUPABASE COLUMNS TO EXISTING APP COLUMNS
+        # ----------------------------------------------------
+        order_data = []
+
+        for row in rows:
+
+            order_data.append({
+
+                "DATE": row.get(
+                    "order_date",
+                    ""
+                ),
+
+                "USER": row.get(
+                    "user_name",
+                    ""
+                ),
+
+                "PARTY": row.get(
+                    "party",
+                    ""
+                ),
+
+                "SKU": row.get(
+                    "sku",
+                    ""
+                ),
+
+                "QTY": row.get(
+                    "qty",
+                    0
+                ),
+
+                "FINAL STATUS": row.get(
+                    "final_status",
+                    ""
+                )
+
+            })
+
         return {
-            "success": False,
-            "message": f"Connection error: {e}"
+            "success": True,
+            "data": order_data
         }
-    try:
-        return response.json()
-    except Exception:
+
+    except Exception as e:
+
         return {
             "success": False,
             "message": (
-                "Order Activity Apps Script se sahi response nahi mila "
-                f"(HTTP {response.status_code}). "
-                "Ho sakta hai Apps Script execution timeout ho gaya ho "
-                "ya usmein koi error aaya ho. Apps Script ke Executions "
-                "log mein check karo."
+                f"Supabase Order Activity error: {e}"
             )
         }
 
