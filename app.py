@@ -355,22 +355,35 @@ def load_od_status():
 # LOGIN FUNCTION
 # ============================================================
 def login_user(username, password):
+
     payload = {
         "action": "login",
         "username": username,
         "password": password
     }
+
     try:
         response = requests.post(
             LOGIN_API_URL,
             json=payload,
-            timeout=10
+            timeout=30
         )
+
+        print("STATUS:", response.status_code)
+        print("RESPONSE:", response.text)
+
         return response.json()
+
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "message": "Login API timed out after 30 seconds"
+        }
+
     except Exception as e:
         return {
             "success": False,
-            "message": f"Connection error: {e}"
+            "message": f"Login API error: {e}"
         }
 
 # ============================================================
