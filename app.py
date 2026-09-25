@@ -283,82 +283,82 @@ def load_stock():
 # ============================================================
 # LOAD OD / OUTSTANDING DATA
 # ============================================================
+# ============================================================
+# LOAD OD / OUTSTANDING DATA FROM SUPABASE
+# ============================================================
 @st.cache_data(ttl=120)
 def load_od_status():
+
     try:
-        response = requests.get(
-            OD_URL,
-            timeout=30
-        )
-    except Exception as e:
-        raise Exception(
-            f"OD Google Sheet connection failed: {e}"
-        )
-    if response.status_code != 200:
-        if response.status_code == 401:
-            raise Exception(
-                "HTTP 401 Unauthorized. "
-                "OD Google Sheet CSV access allowed nahi hai. "
-                "Google Sheet mein Share → General Access → "
-                "Anyone with the link → Viewer karo."
+
+        response = (
+            supabase
+            .table("od_status")
+            .select(
+                "party_name,"
+                "od,"
+                "ofl,"
+                "not_due,"
+                "grand_total,"
+                "credit_limit,"
+                "zone,"
+                "balance_limit"
             )
-        raise Exception(
-            f"Google Sheet HTTP Error {response.status_code}"
+            .execute()
         )
-    try:
-        from io import StringIO
-        df = pd.read_csv(
-            StringIO(response.text),
-            header=1
+
+        rows = response.data or []
+
+        if not rows:
+            return pd.DataFrame(
+                columns=[
+                    "PARTY NAME",
+                    "OD",
+                    "OFL",
+                    "NOT DUE",
+                    "GRAND TOTAL",
+                    "CREDIT LIMIT",
+                    "ZONE",
+                    "BALANCE LIMIT"
+                ]
+            )
+
+        df = pd.DataFrame(rows)
+
+        # Supabase column names
+        # → existing app column names
+        df = df.rename(
+            columns={
+                "party_name": "PARTY NAME",
+                "od": "OD",
+                "ofl": "OFL",
+                "not_due": "NOT DUE",
+                "grand_total": "GRAND TOTAL",
+                "credit_limit": "CREDIT LIMIT",
+                "zone": "ZONE",
+                "balance_limit": "BALANCE LIMIT"
+            }
         )
+
+        # Same cleanup as old Google Sheet logic
+        df["PARTY NAME"] = (
+            df["PARTY NAME"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+
+        df = df[
+            df["PARTY NAME"].str.upper() != "TOTAL"
+        ].copy()
+
+        return df
+
     except Exception as e:
+
         raise Exception(
-            f"OD CSV read error: {e}"
+            f"Supabase OD data load error: {e}"
         )
-    df.columns = (
-        df.columns
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
-    required_columns = [
-        "PARTY NAME",
-        "OD",
-        "OFL",
-        "NOT DUE",
-        "GRAND TOTAL",
-        "CREDIT LIMIT",
-        "ZONE",
-        "BALANCE LIMIT"
-    ]
-    missing_columns = [
-        col
-        for col in required_columns
-        if col not in df.columns
-    ]
-    if missing_columns:
-        raise Exception(
-            "OD Sheet mein required columns nahi mile: "
-            + ", ".join(missing_columns)
-        )
-    df = df[
-        required_columns
-    ].copy()
-    df = df.dropna(
-        how="all"
-    )
-    df["PARTY NAME"] = (
-        df["PARTY NAME"]
-        .fillna("")
-        .astype(str)
-        .str.strip()
-    )
-    df = df[
-        df["PARTY NAME"]
-        .str.upper()
-        != "TOTAL"
-    ].copy()
-    return df
 
 # ============================================================
 # LOGIN FUNCTION
