@@ -399,21 +399,45 @@ def login_user(username, password):
 # USER MAPPING FUNCTION
 # ============================================================
 def get_user_mapping(username):
-    payload = {
-        "action": "get_mapping",
-        "username": username
-    }
+
     try:
-        response = requests.post(
-            LOGIN_API_URL,
-            json=payload,
-            timeout=10
+
+        response = (
+            supabase
+            .table("user_parties")
+            .select("party_name")
+            .eq("username", username)
+            .execute()
         )
-        return response.json()
+
+        rows = response.data or []
+
+        parties = []
+
+        for row in rows:
+
+            party = str(
+                row.get("party_name", "")
+            ).strip()
+
+            if party:
+                parties.append(party)
+
+        # Remove duplicates
+        parties = list(dict.fromkeys(parties))
+
+        return {
+            "success": True,
+            "username": username,
+            "parties": parties,
+            "count": len(parties)
+        }
+
     except Exception as e:
+
         return {
             "success": False,
-            "message": f"Connection error: {e}"
+            "message": f"Supabase user mapping error: {e}"
         }
 
 # ============================================================
