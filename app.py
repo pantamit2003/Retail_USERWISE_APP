@@ -243,42 +243,174 @@ def clear_all_cached_data():
 # ============================================================
 # LOAD STOCK
 # ============================================================
+# ============================================================
+# LOAD STOCK FROM SUPABASE
+# ============================================================
 @st.cache_data(ttl=120)
 def load_stock():
-    df = pd.read_csv(
-        STOCK_URL,
-        header=3
-    )
-    df.columns = (
-        df.columns
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
-    df = df.dropna(
-        how="all"
-    ).copy()
-    if "PRODUCT NAME" in df.columns:
-        product_check = (
-            df["PRODUCT NAME"]
-            .fillna("")
+
+    try:
+
+        response = (
+            supabase
+            .table("stock")
+            .select("*")
+            .execute()
+        )
+
+        rows = response.data or []
+
+        if not rows:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(rows)
+
+        # ----------------------------------------------------
+        # Restore complete Google Sheet row from row_data
+        # ----------------------------------------------------
+        if "row_data" in df.columns:
+
+            row_data_df = pd.json_normalize(
+                df["row_data"]
+            )
+
+            # Convert column names to uppercase
+            row_data_df.columns = (
+                row_data_df.columns
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            # ------------------------------------------------
+            # Supabase's main fields are also useful if
+            # something is missing from row_data
+            # ------------------------------------------------
+            if "SKU CODE" not in row_data_df.columns:
+                row_data_df["SKU CODE"] = (
+                    df["sku_code"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                )
+
+            if "PRODUCT NAME" not in row_data_df.columns:
+                row_data_df["PRODUCT NAME"] = (
+                    df["product_name"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                )
+
+            if "STATUS" not in row_data_df.columns:
+                row_data_df["STATUS"] = (
+                    df["status"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                )
+
+            if "SUB CATEGORY" not in row_data_df.columns:
+                row_data_df["SUB CATEGORY"] = (
+                    df["sub_category"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                )
+
+            if "FARUKHNAGAR" not in row_data_df.columns:
+                row_data_df["FARUKHNAGAR"] = df[
+                    "farukhnagar"
+                ]
+
+            if "MUMBAI STOCK" not in row_data_df.columns:
+                row_data_df["MUMBAI STOCK"] = df[
+                    "mumbai_stock"
+                ]
+
+            if "L3 STOCK" not in row_data_df.columns:
+                row_data_df["L3 STOCK"] = df[
+                    "l3_stock"
+                ]
+
+            if "HSN CODE" not in row_data_df.columns:
+                row_data_df["HSN CODE"] = (
+                    df["hsn_code"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                )
+
+            if "MRP" not in row_data_df.columns:
+                row_data_df["MRP"] = df["mrp"]
+
+            df = row_data_df
+
+        else:
+
+            # Fallback if row_data doesn't exist
+            df.columns = (
+                df.columns
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+        # ----------------------------------------------------
+        # CLEAN DATA
+        # ----------------------------------------------------
+
+        df = df.dropna(
+            how="all"
+        ).copy()
+
+        if "PRODUCT NAME" in df.columns:
+
+            product_check = (
+                df["PRODUCT NAME"]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+            )
+
+            df = df[
+                product_check != ""
+            ].copy()
+
+        # ----------------------------------------------------
+        # Existing app expects SKU
+        # ----------------------------------------------------
+
+        if (
+            "SKU" not in df.columns
+            and "SKU CODE" in df.columns
+        ):
+
+            df["SKU"] = (
+                df["SKU CODE"]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+            )
+
+        # ----------------------------------------------------
+        # Make sure column names are uppercase
+        # ----------------------------------------------------
+
+        df.columns = (
+            df.columns
             .astype(str)
             .str.strip()
+            .str.upper()
         )
-        df = df[
-            product_check != ""
-        ].copy()
-    if (
-        "SKU" not in df.columns
-        and "SKU CODE" in df.columns
-    ):
-        df["SKU"] = (
-            df["SKU CODE"]
-            .fillna("")
-            .astype(str)
-            .str.strip()
+
+        return df
+
+    except Exception as e:
+
+        raise Exception(
+            f"Supabase Stock load error: {e}"
         )
-    return df
 
 # ============================================================
 # LOAD OD / OUTSTANDING DATA
