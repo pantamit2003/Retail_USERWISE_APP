@@ -364,35 +364,39 @@ def load_od_status():
 # LOGIN FUNCTION
 # ============================================================
 def login_user(username, password):
-
-    payload = {
-        "action": "login",
-        "username": username,
-        "password": password
-    }
-
     try:
-        response = requests.post(
-            LOGIN_API_URL,
-            json=payload,
-            timeout=30
+        response = (
+            supabase
+            .table("users")
+            .select("username, name, role, active")
+            .eq("username", username)
+            .eq("password", password)
+            .eq("active", True)
+            .limit(1)
+            .execute()
         )
 
-        print("STATUS:", response.status_code)
-        print("RESPONSE:", response.text)
+        rows = response.data or []
 
-        return response.json()
+        if not rows:
+            return {
+                "success": False,
+                "message": "Invalid username or password ❌"
+            }
 
-    except requests.exceptions.Timeout:
+        user = rows[0]
+
         return {
-            "success": False,
-            "message": "Login API timed out after 30 seconds"
+            "success": True,
+            "username": user.get("username", ""),
+            "name": user.get("name", ""),
+            "role": user.get("role", "")
         }
 
     except Exception as e:
         return {
             "success": False,
-            "message": f"Login API error: {e}"
+            "message": f"Supabase login error: {e}"
         }
 
 # ============================================================
