@@ -244,6 +244,8 @@ def clear_all_cached_data():
 # LOAD STOCK
 # ============================================================
 # ============================================================
+# ============================================================
+# ============================================================
 # LOAD STOCK FROM SUPABASE
 # ============================================================
 @st.cache_data(ttl=120)
@@ -251,17 +253,48 @@ def load_stock():
 
     try:
 
-        response = (
-            supabase
-            .table("stock")
-            .select("*")
-            .execute()
-        )
+        # ====================================================
+        # FETCH ALL STOCK ROWS FROM SUPABASE
+        # ====================================================
 
-        rows = response.data or []
+        all_rows = []
+        page_size = 1000
+        start = 0
+
+        while True:
+
+            response = (
+                supabase
+                .table("stock")
+                .select("*")
+                .order("id")
+                .range(
+                    start,
+                    start + page_size - 1
+                )
+                .execute()
+            )
+
+            batch = response.data or []
+
+            if not batch:
+                break
+
+            all_rows.extend(batch)
+
+            if len(batch) < page_size:
+                break
+
+            start += page_size
+
+        rows = all_rows
 
         if not rows:
             return pd.DataFrame()
+
+        # ====================================================
+        # CREATE DATAFRAME FROM ALL SUPABASE ROWS
+        # ====================================================
 
         df = pd.DataFrame(rows)
 
@@ -351,7 +384,9 @@ def load_stock():
         # FORCE REQUIRED COLUMNS FROM SUPABASE
         # ====================================================
 
-        row_data_df["SKU CODE"] = supabase_sku.values
+        row_data_df["SKU CODE"] = (
+            supabase_sku.values
+        )
 
         row_data_df["PRODUCT NAME"] = (
             supabase_product.values
@@ -459,125 +494,6 @@ def load_stock():
         )
 
 # ============================================================
-# LOAD OD / OUTSTANDING DATA
-# ============================================================
-# ============================================================
-# LOAD OD / OUTSTANDING DATA FROM SUPABASE
-# ============================================================
-@st.cache_data(ttl=120)
-def load_od_status():
-
-    try:
-
-        response = (
-            supabase
-            .table("od_status")
-            .select(
-                "party_name,"
-                "od,"
-                "ofl,"
-                "not_due,"
-                "grand_total,"
-                "credit_limit,"
-                "zone,"
-                "balance_limit"
-            )
-            .execute()
-        )
-
-        rows = response.data or []
-
-        if not rows:
-            return pd.DataFrame(
-                columns=[
-                    "PARTY NAME",
-                    "OD",
-                    "OFL",
-                    "NOT DUE",
-                    "GRAND TOTAL",
-                    "CREDIT LIMIT",
-                    "ZONE",
-                    "BALANCE LIMIT"
-                ]
-            )
-
-        df = pd.DataFrame(rows)
-
-        # Supabase column names
-        # → existing app column names
-        df = df.rename(
-            columns={
-                "party_name": "PARTY NAME",
-                "od": "OD",
-                "ofl": "OFL",
-                "not_due": "NOT DUE",
-                "grand_total": "GRAND TOTAL",
-                "credit_limit": "CREDIT LIMIT",
-                "zone": "ZONE",
-                "balance_limit": "BALANCE LIMIT"
-            }
-        )
-
-        # Same cleanup as old Google Sheet logic
-        df["PARTY NAME"] = (
-            df["PARTY NAME"]
-            .fillna("")
-            .astype(str)
-            .str.strip()
-        )
-
-        df = df[
-            df["PARTY NAME"].str.upper() != "TOTAL"
-        ].copy()
-
-        return df
-
-    except Exception as e:
-
-        raise Exception(
-            f"Supabase OD data load error: {e}"
-        )
-
-# ============================================================
-# LOGIN FUNCTION
-# ============================================================
-def login_user(username, password):
-    try:
-        response = (
-            supabase
-            .table("users")
-            .select("username, name, role, active")
-            .eq("username", username)
-            .eq("password", password)
-            .eq("active", True)
-            .limit(1)
-            .execute()
-        )
-
-        rows = response.data or []
-
-        if not rows:
-            return {
-                "success": False,
-                "message": "Invalid username or password ❌"
-            }
-
-        user = rows[0]
-
-        return {
-            "success": True,
-            "username": user.get("username", ""),
-            "name": user.get("name", ""),
-            "role": user.get("role", "")
-        }
-
-    except Exception as e:
-        return {
-            "success": False,
-            "message": f"Supabase login error: {e}"
-        }
-
-# ============================================================
 # USER MAPPING FUNCTION
 # ============================================================
 def get_user_mapping(username):
@@ -621,7 +537,6 @@ def get_user_mapping(username):
             "success": False,
             "message": f"Supabase user mapping error: {e}"
         }
-
 # ============================================================
 # SEND ORDER DATA
 # CREATE ORDER ONLY
@@ -639,47 +554,75 @@ def send_data(payload):
 # ============================================================
 # GET ORDER ACTIVITY FROM SUPABASE
 # ============================================================
+# ============================================================
+# GET ORDER ACTIVITY FROM SUPABASE
+# ============================================================
 @st.cache_data(ttl=30)
 def get_order_activity(parties):
 
     try:
 
-        query = (
-            supabase
-            .table("orders")
-            .select(
-                "order_date,"
-                "user_name,"
-                "party,"
-                "sku,"
-                "qty,"
-                "final_status"
-            )
-        )
+        all_rows = []
+        page_size = 1000
+        start = 0
 
-        # ----------------------------------------------------
-        # NORMAL USER → ONLY MAPPED PARTIES
-        # ADMIN → ALL ORDERS
-        # ----------------------------------------------------
-        if parties:
-            query = query.in_(
-                "party",
-                list(parties)
+        while True:
+
+            query = (
+                supabase
+                .table("orders")
+                .select(
+                    "order_date,"
+                    "user_name,"
+                    "party,"
+                    "sku,"
+                    "qty,"
+                    "final_status"
+                )
             )
 
-        # Latest orders first
-        query = query.order(
-            "order_date",
-            desc=True
-        )
+            # ------------------------------------------------
+            # NORMAL USER → ONLY MAPPED PARTIES
+            # ADMIN → ALL ORDERS
+            # ------------------------------------------------
+            if parties:
+                query = query.in_(
+                    "party",
+                    list(parties)
+                )
 
-        response = query.execute()
+            query = (
+                query
+                .order(
+                    "order_date",
+                    desc=True
+                )
+                .range(
+                    start,
+                    start + page_size - 1
+                )
+            )
 
-        rows = response.data or []
+            response = query.execute()
+
+            batch = response.data or []
+
+            if not batch:
+                break
+
+            all_rows.extend(batch)
+
+            if len(batch) < page_size:
+                break
+
+            start += page_size
+
+        rows = all_rows
 
         # ----------------------------------------------------
         # CONVERT SUPABASE COLUMNS TO EXISTING APP COLUMNS
         # ----------------------------------------------------
+
         order_data = []
 
         for row in rows:
