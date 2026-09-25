@@ -265,16 +265,75 @@ def load_stock():
 
         df = pd.DataFrame(rows)
 
-        # ----------------------------------------------------
-        # Restore complete Google Sheet row from row_data
-        # ----------------------------------------------------
+        # ====================================================
+        # SAVE SUPABASE AUTHORITATIVE VALUES
+        # ====================================================
+
+        supabase_farukhnagar = pd.to_numeric(
+            df["farukhnagar"],
+            errors="coerce"
+        ).fillna(0)
+
+        supabase_mumbai = pd.to_numeric(
+            df["mumbai_stock"],
+            errors="coerce"
+        ).fillna(0)
+
+        supabase_l3 = pd.to_numeric(
+            df["l3_stock"],
+            errors="coerce"
+        ).fillna(0)
+
+        supabase_sku = (
+            df["sku_code"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+
+        supabase_product = (
+            df["product_name"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+
+        supabase_status = (
+            df["status"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+
+        supabase_subcategory = (
+            df["sub_category"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+
+        supabase_hsn = (
+            df["hsn_code"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+
+        supabase_mrp = pd.to_numeric(
+            df["mrp"],
+            errors="coerce"
+        ).fillna(0)
+
+        # ====================================================
+        # RESTORE COMPLETE GOOGLE SHEET ROW
+        # ====================================================
+
         if "row_data" in df.columns:
 
             row_data_df = pd.json_normalize(
                 df["row_data"]
             )
 
-            # Convert column names to uppercase
             row_data_df.columns = (
                 row_data_df.columns
                 .astype(str)
@@ -282,83 +341,55 @@ def load_stock():
                 .str.upper()
             )
 
-            # ------------------------------------------------
-            # Supabase's main fields are also useful if
-            # something is missing from row_data
-            # ------------------------------------------------
-            if "SKU CODE" not in row_data_df.columns:
-                row_data_df["SKU CODE"] = (
-                    df["sku_code"]
-                    .fillna("")
-                    .astype(str)
-                    .str.strip()
-                )
-
-            if "PRODUCT NAME" not in row_data_df.columns:
-                row_data_df["PRODUCT NAME"] = (
-                    df["product_name"]
-                    .fillna("")
-                    .astype(str)
-                    .str.strip()
-                )
-
-            if "STATUS" not in row_data_df.columns:
-                row_data_df["STATUS"] = (
-                    df["status"]
-                    .fillna("")
-                    .astype(str)
-                    .str.strip()
-                )
-
-            if "SUB CATEGORY" not in row_data_df.columns:
-                row_data_df["SUB CATEGORY"] = (
-                    df["sub_category"]
-                    .fillna("")
-                    .astype(str)
-                    .str.strip()
-                )
-
-            if "FARUKHNAGAR" not in row_data_df.columns:
-                row_data_df["FARUKHNAGAR"] = df[
-                    "farukhnagar"
-                ]
-
-            if "MUMBAI STOCK" not in row_data_df.columns:
-                row_data_df["MUMBAI STOCK"] = df[
-                    "mumbai_stock"
-                ]
-
-            if "L3 STOCK" not in row_data_df.columns:
-                row_data_df["L3 STOCK"] = df[
-                    "l3_stock"
-                ]
-
-            if "HSN CODE" not in row_data_df.columns:
-                row_data_df["HSN CODE"] = (
-                    df["hsn_code"]
-                    .fillna("")
-                    .astype(str)
-                    .str.strip()
-                )
-
-            if "MRP" not in row_data_df.columns:
-                row_data_df["MRP"] = df["mrp"]
-
-            df = row_data_df
-
         else:
 
-            # Fallback if row_data doesn't exist
-            df.columns = (
-                df.columns
-                .astype(str)
-                .str.strip()
-                .str.upper()
+            row_data_df = pd.DataFrame(
+                index=df.index
             )
 
-        # ----------------------------------------------------
+        # ====================================================
+        # FORCE REQUIRED COLUMNS FROM SUPABASE
+        # ====================================================
+
+        row_data_df["SKU CODE"] = supabase_sku.values
+
+        row_data_df["PRODUCT NAME"] = (
+            supabase_product.values
+        )
+
+        row_data_df["STATUS"] = (
+            supabase_status.values
+        )
+
+        row_data_df["SUB CATEGORY"] = (
+            supabase_subcategory.values
+        )
+
+        row_data_df["FARUKHNAGAR"] = (
+            supabase_farukhnagar.values
+        )
+
+        row_data_df["MUMBAI STOCK"] = (
+            supabase_mumbai.values
+        )
+
+        row_data_df["L3 STOCK"] = (
+            supabase_l3.values
+        )
+
+        row_data_df["HSN CODE"] = (
+            supabase_hsn.values
+        )
+
+        row_data_df["MRP"] = (
+            supabase_mrp.values
+        )
+
+        df = row_data_df
+
+        # ====================================================
         # CLEAN DATA
-        # ----------------------------------------------------
+        # ====================================================
 
         df = df.dropna(
             how="all"
@@ -377,14 +408,11 @@ def load_stock():
                 product_check != ""
             ].copy()
 
-        # ----------------------------------------------------
-        # Existing app expects SKU
-        # ----------------------------------------------------
+        # ====================================================
+        # SKU
+        # ====================================================
 
-        if (
-            "SKU" not in df.columns
-            and "SKU CODE" in df.columns
-        ):
+        if "SKU CODE" in df.columns:
 
             df["SKU"] = (
                 df["SKU CODE"]
@@ -393,9 +421,27 @@ def load_stock():
                 .str.strip()
             )
 
-        # ----------------------------------------------------
-        # Make sure column names are uppercase
-        # ----------------------------------------------------
+        # ====================================================
+        # NUMERIC STOCK COLUMNS
+        # ====================================================
+
+        for col in [
+            "FARUKHNAGAR",
+            "MUMBAI STOCK",
+            "L3 STOCK",
+            "MRP"
+        ]:
+
+            if col in df.columns:
+
+                df[col] = pd.to_numeric(
+                    df[col],
+                    errors="coerce"
+                ).fillna(0)
+
+        # ====================================================
+        # FINAL COLUMN CLEAN
+        # ====================================================
 
         df.columns = (
             df.columns
