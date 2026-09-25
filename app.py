@@ -1370,6 +1370,51 @@ if not st.session_state.logged_in:
 else:
 
     # ========================================================
+    # AUTO LOGOUT ON 10 MIN INACTIVITY
+    # ========================================================
+
+    if st.query_params.get("logout") == "1":
+
+        st.session_state.clear()
+
+        st.query_params.clear()
+
+        st.rerun()
+
+    IDLE_TIMEOUT_MS = 10 * 60 * 1000  # 10 minutes
+
+    st.components.v1.html(
+        f"""
+        <script>
+        (function() {{
+            const timeoutMs = {IDLE_TIMEOUT_MS};
+            let idleTimer;
+
+            function doLogout() {{
+                const topWindow = window.parent;
+                const url = new URL(topWindow.location.href);
+                url.searchParams.set("logout", "1");
+                topWindow.location.href = url.toString();
+            }}
+
+            function resetTimer() {{
+                clearTimeout(idleTimer);
+                idleTimer = setTimeout(doLogout, timeoutMs);
+            }}
+
+            ["mousemove", "keydown", "click", "scroll", "touchstart"].forEach(
+                evt => window.parent.document.addEventListener(evt, resetTimer, true)
+            );
+
+            resetTimer();
+        }})();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+    # ========================================================
     # SIDEBAR
     # ========================================================
 
