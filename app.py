@@ -7,7 +7,7 @@ import pytz
 import base64
 import os
 from supabase import create_client
-
+from expense_page import render_expense_page
 
 # ============================================================
 # SUPABASE CONFIG
@@ -1537,6 +1537,13 @@ else:
 
             st.rerun()
 
+        if st.button(
+                "💸 Expense",
+                use_container_width=True
+        ):
+            st.session_state.page = "Expense"
+
+            st.rerun()
         st.divider()
 
         # ----------------------------------------------------
@@ -3458,3 +3465,11 @@ else:
                             st.warning(
                                 "Ye image load nahi ho payi ❌"
                             )
+
+    # ========================================================
+    # EXPENSE
+    # ========================================================
+
+    elif st.session_state.page == "Expense":
+
+        render_expense_page()
