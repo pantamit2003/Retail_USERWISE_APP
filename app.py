@@ -1250,6 +1250,10 @@ if not st.session_state.logged_in:
 
         if login_clicked:
 
+            # Extra spaces hatao (aage/peeche)
+            username = (username or "").strip()
+            password = (password or "").strip()
+            
             if not username:
 
                 st.warning(
